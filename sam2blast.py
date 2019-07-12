@@ -13,6 +13,7 @@ import sys
 import re
 from math import exp, log
 
+
 def main(infile):
     dblen = 0
     for line in open(infile):
