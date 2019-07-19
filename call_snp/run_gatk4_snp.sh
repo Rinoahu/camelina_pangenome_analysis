@@ -148,7 +148,8 @@ while read fastq
 
 			# filter
 			echo "gatk VariantFiltration --missing-values-evaluate-as-failing true -V $input.srt.dedup.vcf --verbosity ERROR -R $ref -O $input.srt.dedup.vcf.flt --filter-expression \"QD < 2.0 || FS > 200.0 || SOR > 10.0 || MQRankSum < -12.5 || ReadPosRankSum < -8.0 || QUAL < $MEANQUAL\" --filter-name \"Filter\" "
-			gatk VariantFiltration --missing-values-evaluate-as-failing true -V $input.srt.dedup.vcf --verbosity ERROR -R $ref -O $input.srt.dedup.vcf.flt --filter-expression " FS > 200 || SOR > 10 || MQRankSum < -12.5 || ReadPosRankSum < -8.0 || QUAL < $MEANQUAL" --filter-name "Filter"
+			#gatk VariantFiltration --missing-values-evaluate-as-failing true -V $input.srt.dedup.vcf --verbosity ERROR -R $ref -O $input.srt.dedup.vcf.flt --filter-expression "FS > 200 || SOR > 10 || MQRankSum < -12.5 || ReadPosRankSum < -8.0 || QUAL < $MEANQUAL" --filter-name "Filter"
+			gatk VariantFiltration --missing-values-evaluate-as-failing true -V $input.srt.dedup.vcf --verbosity ERROR -R $ref -O $input.srt.dedup.vcf.flt --filter-expression "QUAL < $MEANQUAL" --filter-name "Filter"
 
 
 			# add break
