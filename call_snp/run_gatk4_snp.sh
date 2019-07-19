@@ -16,31 +16,25 @@ if [ $# -lt 2 ]
 
 fi
 
-# set the java home and the picard home
-JAVA_HOME=''
-
-picard_run='java -Xmx4g -jar /home/zhans/tools/assembly/broad/picard/dist'
-gatk_run='java -Xmx4g -jar /home/zhans/tools/assembly/broad/gatk/GenomeAnalysisTK.jar'
-
-
-
-
+# get the name of reference sequence
 ref=$1
 fasta=`echo $ref | rev | cut -d \/ -f 1 | rev`
-# create dict for ref
-#$picard_run/CreateSequenceDictionary.jar R=$ref O=$ref.dict
-#echo "$picard_run/CreateSequenceDictionary.jar R=$ref O=$ref.dict"
-echo "gatk CreateSequenceDictionary R=$ref O=$ref.dict"
-gatk CreateSequenceDictionary R=$ref O=$ref.dict
 
 
-ln -s $fasta $ref.fa
+
+ln -sf $fasta $ref.fa
 echo "ln -s $fasta $ref.fa"
+
+# create dict for ref
+echo "gatk CreateSequenceDictionary -R $ref.fa -O $ref.dict"
+gatk CreateSequenceDictionary -R $ref.fa -O $ref.dict
+
 ref=$ref.fa
 
-qry=$2
-dbsnp=$3
 
+qry=$2
+
+dbsnp=$3
 
 
 # index the ref
@@ -65,14 +59,11 @@ fi
 # create tmp dir
 if [ -d "gatk_tmp_dir" ]; then
         echo 'gatk_tmp_dir exist'
-        rm -rf gatk_tmp_dir
+        #$ rm -rf gatk_tmp_dir
 fi
 
 mkdir gatk_tmp_dir
 tmp=gatk_tmp_dir
-
-
-#$gatk_run/CreateSequenceDictionary.jar I=$ref O=$ref_nosuf.dict
 
 
 # creat tmp dir
@@ -82,12 +73,14 @@ while read fastq
 	do
 
 		# 1. bwa mapping and convert to sam step
+
 		# get the reads
 		left=`echo $fastq | awk '{print $1}'`
 		right=`echo $fastq | awk '{print $2}'`
+
 		# get sample name
-        sample=`echo $left | rev | cut -d \/ -f 1 | rev`
-        sample2=`echo $right | rev | cut -d \/ -f 1 | rev`
+	        sample=`echo $left | rev | cut -d \/ -f 1 | rev`
+        	sample2=`echo $right | rev | cut -d \/ -f 1 | rev`
 
 		echo 'the left', $left, 'the right', $right
 
@@ -98,87 +91,87 @@ while read fastq
 
 		else
 			echo "bwa mem -t 16 -R "@RG\tID:$sample\tLB:$sample\tPL:ILLUMINA\tSM:$sample" $ref $left $right >  $tmp/$sample\_aln.sai.sam"
-			bwa mem -t 16 -R "@RG\tID:$sample\tLB:$sample\tPL:ILLUMINA\tSM:$sample" $ref $left $right >  $tmp/$sample\_aln.sai.sam
-        fi
+			#$ bwa mem -t 16 -R "@RG\tID:$sample\tLB:$sample\tPL:ILLUMINA\tSM:$sample" $ref $left $right >  $tmp/$sample\_aln.sai.sam
+        	fi
 
 
 		# 2. sort aln sam and convert sam to bam
 		input=$tmp/$sample\_aln.sai.sam
-		#$picard_run/SortSam.jar I=$input O=$input.sort SO=coordinate VALIDATION_STRINGENCY=LENIENT
-		#echo "$picard_run/SortSam.jar I=$input O=$input.sort SO=coordinate VALIDATION_STRINGENCY=LENIENT"
+
 		echo "gatk SortSam I=$input O=$input.sort SO=coordinate VALIDATION_STRINGENCY=LENIENT"
-		gatk SortSam I=$input O=$input.sort SO=coordinate VALIDATION_STRINGENCY=LENIENT
+		#$ gatk SortSam -I $input -O $input.srt -SO coordinate -VALIDATION_STRINGENCY LENIENT
 
 
 		# 3. delete duplicates
-		input=$input.sort
-		#$picard_run/MarkDuplicates.jar I=$input O=$input.dedup METRICS_FILE=$input.metrics.txt VALIDATION_STRINGENCY=LENIENT
-		#echo "$picard_run/MarkDuplicates.jar I=$input O=$input.dedup METRICS_FILE=$input.metrics.txt VALIDATION_STRINGENCY=LENIENT"
+		echo "gatk MarkDuplicates I=$input O=$input.dedup METRICS_FILE=$input.metrics.txt VALIDATION_STRINGENCY=LENIENT"
+		#$ gatk MarkDuplicates -I $input.srt -O $input.srt.dedup -METRICS_FILE=$input.srt.metrics.txt -VALIDATION_STRINGENCY=LENIENT
 
-        echo "gatk MarkDuplicates I=$input O=$input.dedup METRICS_FILE=$input.metrics.txt VALIDATION_STRINGENCY=LENIENT"
-        gatk MarkDuplicates I=$input O=$input.dedup METRICS_FILE=$input.metrics.txt VALIDATION_STRINGENCY=LENIENT
 
 
 		# 4. add RG to distinguish sample from different source, this step can be avoid if bwa aln has added RG to results
-		# addRG_bam=$dedup_bam.addRG_bam
-		# $picard_run/AddOrReplaceReadGroups.jar I=$dedup_bam O=$addRG_bam SM=$sample LB=$sample ID=ILLUMINA
-		input=$input.dedup
-		ln -s ../$input $input.RG.bam
-		echo "ln -s $input $input.RG.bam"
-
 		# index the bam
-		samtools index $input.RG.bam
-		echo "samtools index $input.RG.bam"
+		echo "samtools index $input.srt.dedup"
+		#$ samtools index $input.srt.dedup
 
-		input=$input.RG.bam
-		
 		# 5. Indel-based realignment
 		if [ "$dbsnp" == "" ]; then
 
-			echo "gatk HaplotypeCaller -R $ref  -I $input -o $input.gatk_raw_vcf -stand_call_conf 30.0 --emit-ref-confidence GVCF"
-            gatk HaplotypeCaller -R $ref  -I $input -o $input.gatk_raw_vcf -stand_call_conf 30.0 --emit-ref-confidence GVCF
+			echo "gatk HaplotypeCaller -R $ref  -I $input -O $input.gatk_raw_gvcf -stand_call_conf 30.0 --emit-ref-confidence GVCF"
+			#$ gatk HaplotypeCaller -R $ref -I $input.srt.dedup -O $input.srt.dedup.gatk_raw_gvcf -stand-call-conf 30.0 -ERC GVCF
+			echo "gatk GenotypeGVCFs -R $ref --variant $input.srt.dedup.gatk_raw_gvcf -O $input.srt.dedup.gatk_raw_vcf"
+			#$ gatk GenotypeGVCFs -R $ref --variant $input.srt.dedup.gatk_raw_gvcf -O $input.srt.dedup.gatk_raw_vcf
+			#$ bgzip $input.srt.dedup.gatk_raw_vcf
+			#$ tabix -p vcf $input.srt.dedup.gatk_raw_vcf.gz
 
 			echo "samtools mpileup -DSugf $ref $input | bcftools view -Ncvg - > $input.samtools_raw_vcf"
-			samtools mpileup -DSugf $ref $input | bcftools view -Ncvg - > $input.samtools_raw_vcf
+			#$ bcftools mpileup -Sug -f $ref $input.srt.dedup | bcftools call -mv | vcfutils.pl varFilter > $input.srt.dedup.samtools_raw_vcf
+			#$ bgzip $input.srt.dedup.samtools_raw_vcf
+			#$ tabix -p vcf $input.srt.dedup.samtools_raw_vcf.gz
 
-			#$gatk_run -nt 12 -T SelectVariants -R $ref --variant $input.gatk_raw_vcf --concordance $input.samtools_raw_vcf -o $input.concordance_raw_vcf
-			echo "gatk SelectVariants -select-type SNP -R $ref --variant $input.gatk_raw_vcf --concordance $input.samtools_raw_vcf -o $input.concordance_raw_vcf"
-			gatk SelectVariants -select-type SNP -R $ref --variant $input.gatk_raw_vcf --concordance $input.samtools_raw_vcf -o $input.concordance_raw_snp_vcf
+			echo "vcf-isec $input.srt.dedup.samtools_raw_vcf.gz $input.srt.dedup.gatk_raw_vcf.gz > $input.srt.dedup.vcf"
+			vcf-isec $input.srt.dedup.samtools_raw_vcf.gz $input.srt.dedup.gatk_raw_vcf.gz > $input.srt.dedup.vcf
 
-			echo "gatk SelectVariants -select-type INDEL -R $ref --variant $input.gatk_raw_vcf --concordance $input.samtools_raw_vcf -o $input.concordance_raw_vcf"
-			gatk SelectVariants -select-type INDEL -R $ref --variant $input.gatk_raw_vcf --concordance $input.samtools_raw_vcf -o $input.concordance_raw_indel_vcf
 
-            echo "gatk MergeVcfs -I $input.concordance_raw_snp_vcf -I $input.concordance_raw_indel_vcf -O $input.concordance_raw_vcf"
-            gatk MergeVcfs -I $input.concordance_raw_snp_vcf -I $input.concordance_raw_indel_vcf -O $input.concordance_raw_vcf
+			#echo "gatk SelectVariants -select-type SNP -R $ref --variant $input.srt.dedup.gatk_raw_vcf --concordance $input.srt.dedup.samtools_raw_vcf -O $input.srt.dedup.snp.vcf"
+			#gatk SelectVariants -select-type SNP -R $ref --variant $input.srt.dedup.gatk_raw_vcf --concordance $input.srt.dedup.samtools_raw_vcf -O $input.srt.dedup.snp.vcf
 
-			MEANQUAL=`awk '{ if ($1 !~ /#/) { total += $6; count++ } } END { print total/count }' $input.concordance_raw_vcf`
+			#echo "gatk SelectVariants -select-type INDEL -R $ref --variant $input.srt.dedup.gatk_raw_vcf --concordance $input.srt.dedup.samtools_raw_vcf -O $input.srt.dedup.indel.vcf"
+			#gatk SelectVariants -select-type INDEL -R $ref --variant $input.srt.dedup.gatk_raw_vcf --concordance $input.srt.dedup.samtools_raw_vcf -O $input.srt.dedup.indel.vcf
 
-			echo "gatk VariantFiltration --filter-expression " QD < 20.0 || ReadPosRankSum < -8.0 || FS > 10.0 || QUAL < $MEANQUAL" --filterName LowQualFilter --missing-values-evaluate-as-failing true --variant $input.concordance_raw_vcf --verbosity ERROR -R $ref -o $input.concordance_flt_vcf"
+			#echo "gatk MergeVcfs -I $input.srt.dedup.snp.vcf -I $input.srt.dedup.indel.vcf -O $input.srt.dedup.vcf"
+			#$ gatk MergeVcfs -I $input.srt.dedup.snp.vcf -I $input.srt.dedup.indel.vcf -O $input.srt.dedup.vcf
 
-            gatk VariantFiltration --filter-expression " QD < 20.0 || ReadPosRankSum < -8.0 || FS > 10.0 || QUAL < $MEANQUAL" --filterName LowQualFilter --missing-values-evaluate-as-failing true --variant $input.concordance_raw_vcf --verbosity ERROR -R $ref -o $input.concordance_flt_vcf
+			#echo "vcf"
+
+			# get mean of quality
+			MEANQUAL=`awk '{ if ($1 !~ /#/) { total += $6; count++ } } END { print total/count }' $input.srt.dedup.vcf`
+
+			# filter
+			echo "gatk VariantFiltration --missing-values-evaluate-as-failing true -V $input.srt.dedup.vcf --verbosity ERROR -R $ref -O $input.srt.dedup.vcf.flt --filter-expression \"QD < 2.0 || FS > 200.0 || SOR > 10.0 || MQRankSum < -12.5 || ReadPosRankSum < -8.0 || QUAL < $MEANQUAL\" --filter-name \"Filter\" "
+
+			gatk VariantFiltration --missing-values-evaluate-as-failing true -V $input.srt.dedup.vcf --verbosity ERROR -R $ref -O $input.srt.dedup.vcf.flt --filter-expression " FS > 200 || SOR > 10 || MQRankSum < -12.5 || ReadPosRankSum < -8.0 || QUAL < $MEANQUAL" --filter-name "Filter"
+
 
 			# add break
 			#exit 1
 
-			grep -v Filter $input.concordance_flt_vcf > $input.known_site_vcf
-			echo "grep -v Filter $input.concordance_flt_vcf > $input.known_site_vcf"
-			dbsnp=$input.known_site_vcf
+			echo "grep -v Filter $input.srt.dedup.vcf.flt > $input.srt.dedup.vcf.flt.dbsnp"
+			grep -v Filter $input.srt.dedup.vcf.flt > $input.srt.dedup.vcf.flt.dbsnp
+			dbsnp=$input.srt.dedup.vcf.flt.dbsnp
+			gatk IndexFeatureFile -F $dbsnp
+
 		fi
 
 
-
 		# 6. Base quality score recalibration
-        echo "gatk BaseRecalibrator -R $ref -I $input -o $input.recal_tab -knownSites $dbsnp"
-		gatk BaseRecalibrator -R $ref -I $input -O $input.recal_tab --known-sites $dbsnp
-        gatk ApplyBQSR -R $ref -I $input --bqsr-recal-file $input.recal_tab -O $input.recal.bam
+		echo "gatk BaseRecalibrator -R $ref -I $input -O $input.recal_tab --known-sites $dbsnp"
+		#$ gatk BaseRecalibrator -R $ref -I $input.srt.dedup -O $input.srt.dedup.recal_tab --known-sites $dbsnp
+		#$ gatk ApplyBQSR -R $ref -I $input.srt.dedup --bqsr-recal-file $input.srt.dedup.recal_tab -O $input.srt.dedup.recal_tab.bam
 
+        #echo "gatk PrintReads -R $ref -I $input -BQSR $input.recal_tab -o $input.recal.bam"
+		#gatk PrintReads -R $ref -I $input -BQSR $input.recal_tab -o $input.recal_tab.bam
 
-
-        exit 1
-		recal_bam=$realn_bam.recal.bam
-        echo "gatk PrintReads -R $ref -I $input -BQSR $input.recal_tab -o $input.recal.bam"
-		gatk PrintReads -R $ref -I $input -BQSR $input.recal_tab -o $input.recal.bam
-
+		exit 1
 
 		after_recal_tab=$realn_bam.after_recal_tab
 		$gatk_run -T BaseRecalibrator -R $ref -I $input -BQSR $input.recal_tab -o $input.after_recal_tab -knownSites $dbsnp
