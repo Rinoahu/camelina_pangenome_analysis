@@ -59,7 +59,7 @@ fi
 # create tmp dir
 if [ -d "gatk_tmp_dir" ]; then
         echo 'gatk_tmp_dir exist'
-        #$ rm -rf gatk_tmp_dir
+        rm -rf gatk_tmp_dir
 fi
 
 mkdir gatk_tmp_dir
@@ -91,7 +91,7 @@ while read fastq
 
 		else
 			echo "bwa mem -t 16 -R "@RG\tID:$sample\tLB:$sample\tPL:ILLUMINA\tSM:$sample" $ref $left $right >  $tmp/$sample\_aln.sai.sam"
-			#$ bwa mem -t 16 -R "@RG\tID:$sample\tLB:$sample\tPL:ILLUMINA\tSM:$sample" $ref $left $right >  $tmp/$sample\_aln.sai.sam
+			bwa mem -t 16 -R "@RG\tID:$sample\tLB:$sample\tPL:ILLUMINA\tSM:$sample" $ref $left $right >  $tmp/$sample\_aln.sai.sam
         	fi
 
 
@@ -99,34 +99,34 @@ while read fastq
 		input=$tmp/$sample\_aln.sai.sam
 
 		echo "gatk SortSam I=$input O=$input.sort SO=coordinate VALIDATION_STRINGENCY=LENIENT"
-		#$ gatk SortSam -I $input -O $input.srt -SO coordinate -VALIDATION_STRINGENCY LENIENT
+		gatk SortSam -I $input -O $input.srt -SO coordinate -VALIDATION_STRINGENCY LENIENT
 
 
 		# 3. delete duplicates
 		echo "gatk MarkDuplicates I=$input O=$input.dedup METRICS_FILE=$input.metrics.txt VALIDATION_STRINGENCY=LENIENT"
-		#$ gatk MarkDuplicates -I $input.srt -O $input.srt.dedup -METRICS_FILE=$input.srt.metrics.txt -VALIDATION_STRINGENCY=LENIENT
+		gatk MarkDuplicates -I $input.srt -O $input.srt.dedup -METRICS_FILE=$input.srt.metrics.txt -VALIDATION_STRINGENCY=LENIENT
 
 
 
 		# 4. add RG to distinguish sample from different source, this step can be avoid if bwa aln has added RG to results
 		# index the bam
 		echo "samtools index $input.srt.dedup"
-		#$ samtools index $input.srt.dedup
+		samtools index $input.srt.dedup
 
 		# 5. Indel-based realignment
 		if [ "$dbsnp" == "" ]; then
 
 			echo "gatk HaplotypeCaller -R $ref  -I $input -O $input.gatk_raw_gvcf -stand_call_conf 30.0 --emit-ref-confidence GVCF"
-			#$ gatk HaplotypeCaller -R $ref -I $input.srt.dedup -O $input.srt.dedup.gatk_raw_gvcf -stand-call-conf 30.0 -ERC GVCF
+			gatk HaplotypeCaller -R $ref -I $input.srt.dedup -O $input.srt.dedup.gatk_raw_gvcf -stand-call-conf 30.0 -ERC GVCF
 			echo "gatk GenotypeGVCFs -R $ref --variant $input.srt.dedup.gatk_raw_gvcf -O $input.srt.dedup.gatk_raw_vcf"
-			#$ gatk GenotypeGVCFs -R $ref --variant $input.srt.dedup.gatk_raw_gvcf -O $input.srt.dedup.gatk_raw_vcf
-			#$ bgzip $input.srt.dedup.gatk_raw_vcf
-			#$ tabix -p vcf $input.srt.dedup.gatk_raw_vcf.gz
+			gatk GenotypeGVCFs -R $ref --variant $input.srt.dedup.gatk_raw_gvcf -O $input.srt.dedup.gatk_raw_vcf
+			bgzip $input.srt.dedup.gatk_raw_vcf
+			tabix -p vcf $input.srt.dedup.gatk_raw_vcf.gz
 
 			echo "samtools mpileup -DSugf $ref $input | bcftools view -Ncvg - > $input.samtools_raw_vcf"
-			#$ bcftools mpileup -Sug -f $ref $input.srt.dedup | bcftools call -mv | vcfutils.pl varFilter > $input.srt.dedup.samtools_raw_vcf
-			#$ bgzip $input.srt.dedup.samtools_raw_vcf
-			#$ tabix -p vcf $input.srt.dedup.samtools_raw_vcf.gz
+			bcftools mpileup -Sug -f $ref $input.srt.dedup | bcftools call -mv | vcfutils.pl varFilter > $input.srt.dedup.samtools_raw_vcf
+			bgzip $input.srt.dedup.samtools_raw_vcf
+			tabix -p vcf $input.srt.dedup.samtools_raw_vcf.gz
 
 			echo "vcf-isec $input.srt.dedup.samtools_raw_vcf.gz $input.srt.dedup.gatk_raw_vcf.gz > $input.srt.dedup.vcf"
 			vcf-isec $input.srt.dedup.samtools_raw_vcf.gz $input.srt.dedup.gatk_raw_vcf.gz > $input.srt.dedup.vcf
@@ -139,7 +139,7 @@ while read fastq
 			#gatk SelectVariants -select-type INDEL -R $ref --variant $input.srt.dedup.gatk_raw_vcf --concordance $input.srt.dedup.samtools_raw_vcf -O $input.srt.dedup.indel.vcf
 
 			#echo "gatk MergeVcfs -I $input.srt.dedup.snp.vcf -I $input.srt.dedup.indel.vcf -O $input.srt.dedup.vcf"
-			#$ gatk MergeVcfs -I $input.srt.dedup.snp.vcf -I $input.srt.dedup.indel.vcf -O $input.srt.dedup.vcf
+			#gatk MergeVcfs -I $input.srt.dedup.snp.vcf -I $input.srt.dedup.indel.vcf -O $input.srt.dedup.vcf
 
 			#echo "vcf"
 
@@ -148,7 +148,6 @@ while read fastq
 
 			# filter
 			echo "gatk VariantFiltration --missing-values-evaluate-as-failing true -V $input.srt.dedup.vcf --verbosity ERROR -R $ref -O $input.srt.dedup.vcf.flt --filter-expression \"QD < 2.0 || FS > 200.0 || SOR > 10.0 || MQRankSum < -12.5 || ReadPosRankSum < -8.0 || QUAL < $MEANQUAL\" --filter-name \"Filter\" "
-
 			gatk VariantFiltration --missing-values-evaluate-as-failing true -V $input.srt.dedup.vcf --verbosity ERROR -R $ref -O $input.srt.dedup.vcf.flt --filter-expression " FS > 200 || SOR > 10 || MQRankSum < -12.5 || ReadPosRankSum < -8.0 || QUAL < $MEANQUAL" --filter-name "Filter"
 
 
@@ -165,8 +164,8 @@ while read fastq
 
 		# 6. Base quality score recalibration
 		echo "gatk BaseRecalibrator -R $ref -I $input -O $input.recal_tab --known-sites $dbsnp"
-		#$ gatk BaseRecalibrator -R $ref -I $input.srt.dedup -O $input.srt.dedup.recal_tab --known-sites $dbsnp
-		#$ gatk ApplyBQSR -R $ref -I $input.srt.dedup --bqsr-recal-file $input.srt.dedup.recal_tab -O $input.srt.dedup.recal_tab.bam
+		gatk BaseRecalibrator -R $ref -I $input.srt.dedup -O $input.srt.dedup.recal_tab --known-sites $dbsnp
+		gatk ApplyBQSR -R $ref -I $input.srt.dedup --bqsr-recal-file $input.srt.dedup.recal_tab -O $input.srt.dedup.recal_tab.bam
 
         #echo "gatk PrintReads -R $ref -I $input -BQSR $input.recal_tab -o $input.recal.bam"
 		#gatk PrintReads -R $ref -I $input -BQSR $input.recal_tab -o $input.recal_tab.bam
