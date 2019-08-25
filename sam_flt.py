@@ -15,7 +15,8 @@ except:
 # filter and write
 f = pysam.AlignmentFile(qry, "rb")
 _o1 = pysam.AlignmentFile(qry+'.mapped.bam', "wb", template=f)
-_o = pysam.AlignmentFile('-', "wb", template=f)
+#_o = pysam.AlignmentFile('-', "wb", template=f)
+_o = pysam.AlignmentFile(qry+'.unmapped.bam', "wb", template=f)
 
 
 for i in f:
@@ -30,4 +31,4 @@ for i in f:
 
 f.close()
 _o.close()
-
+_o1.close()
