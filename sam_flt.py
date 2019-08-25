@@ -14,7 +14,7 @@ except:
 
 # filter and write
 f = pysam.AlignmentFile(qry, "rb")
-#_o = pysam.AlignmentFile(qry+'.flt.bam', "wb", template=f)
+_o1 = pysam.AlignmentFile(qry+'.mapped.bam', "wb", template=f)
 _o = pysam.AlignmentFile('-', "wb", template=f)
 
 
@@ -22,8 +22,8 @@ for i in f:
 	#if len(i.cigar) == 1 and i.cigar[0][0] == 0:
 	#if sum([elem[1] for elem in i.cigar if elem[0]!=0]) <= 10:
 	flag = sum([elem[1] for elem in i.cigar if elem[0]!=0])
-	if flag < 0:
-		continue
+	if flag < 10:
+		_o1.write(i)
 	else:
 		_o.write(i)
 

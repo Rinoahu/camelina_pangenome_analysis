@@ -5,6 +5,8 @@
 # merge all vcf, maybe need
 bcftools merge --force-samples $1.vcf $2.vcf $3.vcf > merge.vcf
 
+bcftool query -l  merge.vcf > order_accession.txt
+
 
 # convert vcf to files required by plink
 plink --file merge.vcf --allow-no-sex --dog --make-bed --noweb --out merge.binary --allow-extra-chr
