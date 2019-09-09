@@ -63,3 +63,16 @@ java -jar FindFRs.jar -d input.dot -f genome -a .3 -k 10
 gemma -bfile 2000 -gk 2 -o kin
 
 
+# gene prediction
+# 1. augustus model traning:
+# (1). bam file
+# (2). EST + genomethreader
+# (3). gff file
+# 2. de novo:
+# (1). augustuts + trained model
+# (2). genemark-es or et
+# 3. homology prediction
+# (1). exonerate + swissprot
+# (2). genomethreader + swissprot
+# 4. Utr prediction:
+# (1) PASA
